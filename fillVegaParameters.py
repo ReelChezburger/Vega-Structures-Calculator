@@ -27,7 +27,7 @@ xls = pd.ExcelFile(EXCEL_PATH)
 dV_df = pd.read_excel(xls, sheet_name="Delta V and Tank Sizing")
 mass_df = pd.read_excel(xls, sheet_name="Mass Estimation")
 
-# Pull out the mass table
+# Pull the mass table out of mass_df
 mass_table_df = mass_df.copy()
 mass_table_df.columns = mass_table_df.iloc[0]
 mass_table_df = mass_table_df[1:]
@@ -38,23 +38,24 @@ if blank_rows.any():
     mass_table_df = mass_table_df.iloc[:first_blank_index]
 mass_table_df.reset_index(drop=True, inplace=True)
 
-print(mass_table_df)
-
+# Set up parameter dictionary
 parameter_dict = {}
 
-param_map = {
+# Map dv sheet python variables to their excel cell names
+dv_param_map = {
     "AREF": "Barrel Outside C/S Area",
     "OF_RATIO": "O/F"
 }
 
-for py_var, excel_label in param_map.items():
-    value = find_value(dV_df, excel_label, direction="right")  # adjust direction if needed
+for py_var, excel_label in dv_param_map.items():
+    value = find_value(dV_df, excel_label)
     parameter_dict[py_var] = value
 
 # Convert units
-parameter_dict["AREF"] = parameter_dict["AREF"]/1550
+parameter_dict["AREF"] = parameter_dict["AREF"]/1550 # in^2 to m^2
 
-tank_map = {
+# Map mass table python variables to their excel row and column names
+mass_map = {
     "ROCKET_LENGTH": ("TOTAL", "Length (in)"),
     "CG_DRY": ("TOTAL", "Arm (in)"),
     "CG_WET": ("WET", "Arm (in)"),
@@ -64,23 +65,18 @@ tank_map = {
     "LOX_TANK_POSITION": ("LOX Tank", "Front Location (in)")
 }
 
-for py_var, (item_name, col_name) in tank_map.items():
+for py_var, (item_name, col_name) in mass_map.items():
     row = mass_table_df.loc[mass_table_df["Item"] == item_name]
     if not row.empty:
-        parameter_dict[py_var] = (row.iloc[0][col_name])/39.37
+        parameter_dict[py_var] = (row.iloc[0][col_name])/39.37 # inches to meters
     else:
-        parameter_dict[py_var] = None  # or raise an error if missing
+        parameter_dict[py_var] = None
 
-# Inspect extracted values
+# View extracted values
 for k, v in parameter_dict.items():
     print(f"{k}: {v}")
 
-# Pull mass values not in table
-param_map = {
-    "AREF": "Barrel Outside C/S Area",
-    "OF_RATIO": "O/F"
-}
-
+# Write dictionary to csv
 with open('vegaParameters.csv', 'w', newline='') as f:
     writer = csv.DictWriter(f, fieldnames=parameter_dict.keys())
     writer.writeheader()
