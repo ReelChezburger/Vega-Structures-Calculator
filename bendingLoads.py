@@ -6,7 +6,7 @@ import csv
 import math
 
 # Pull constants from vegaParameters csv
-with open("parameters.csv", newline="") as f:
+with open("vegaParameters.csv", newline="") as f:
     reader = csv.DictReader(f)
     params = next(reader)  # single row
 
