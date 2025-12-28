@@ -6,7 +6,7 @@ import csv
 import math
 
 # Pull constants from vegaParameters csv
-with open("vegaParameters.csv", newline="") as f:
+with open("vehicleParameters.csv", newline="") as f:
     reader = csv.DictReader(f)
     params = next(reader)  # single row
 
@@ -157,6 +157,7 @@ alt_arr = flight_df['Altitude (ft)'].to_numpy()/3.281
 mach_arr = flight_df['Mach Number'].to_numpy()
 mass_arr = flight_df['Weight (lb)'].to_numpy()/2.205 # kg
 CP_arr = flight_df['CP (in)'].to_numpy()/39.37 # m
+thrust_arr = flight_df['Thrust (lb)'].to_numpy()*4.448 # N
 
 # derived arrays
 rho_arr = np.zeros(len(alt_arr))
@@ -267,6 +268,23 @@ time_max_M     = time_arr[np.nanargmax(max_M_arr)]
 time_max_q     = min(time_max_q, time_plot[-1])
 time_max_N_fin = min(time_max_N_fin, time_plot[-1])
 time_max_M     = min(time_max_M, time_plot[-1])
+
+"""
+# TWR plot
+plt.figure(figsize=(10, 6))
+
+plt.plot(time_arr[:burnout_idx+1], thrust_arr[:burnout_idx+1]/mass_arr[:burnout_idx+1]/9.81)
+
+plt.xlabel("Time (sec)")
+plt.ylabel("TWR")
+plt.title("TWR vs Time")
+
+plt.grid(True, linestyle='--', alpha=0.5)
+plt.legend()
+
+plt.tight_layout()
+plt.show()
+"""
 
 # Create figure with 4 plots
 fig, axs = plt.subplots(
