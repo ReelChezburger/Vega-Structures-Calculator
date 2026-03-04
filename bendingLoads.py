@@ -2,7 +2,6 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import csv
-
 import math
 
 # Pull constants from vegaParameters csv
@@ -70,7 +69,7 @@ def rho(h):
     # If above model limit (86 km), return very low density
     return 0.0
 
-def nearest_CNa_lookup(m):
+def nearest_CNa_lookup(m, aero_df):
     nearest = aero_df.index[np.argmin(np.abs(aero_df.index - m))]
     return aero_df.loc[nearest, "CNalpha (0 to 4 deg) (per rad)"]
 
@@ -164,7 +163,7 @@ rho_arr = np.zeros(len(alt_arr))
 rho_arr = np.array([rho(h+LAUNCH_ALT) for h in alt_arr]) #kg/m^3
 q_arr = np.zeros(len(alt_arr))
 q_arr = 0.5*rho_arr*abs(vel_arr)**2 #Pa
-CNalpha_arr = np.array([nearest_CNa_lookup(m) for m in mach_arr])
+CNalpha_arr = np.array([nearest_CNa_lookup(m, aero_df) for m in mach_arr])
 CNalpha_fin_arr = CNalpha_arr - 2
 
 # prevent alpha from dividing by 0 and replace with pi/2
