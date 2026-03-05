@@ -123,7 +123,8 @@ def nearest_CNa_lookup(m, aero_df):
     return aero_df.loc[nearest, "CNalpha (0 to 4 deg) (per rad)"]
 
 def get_gravity(h):
-    return 9.81
+    R_earth = 6371000   # meters
+    return g0 * (R_earth / (R_earth + h))**2
 
 def get_Cd(m, aero_df, thrust):
     nearest = aero_df.index[np.argmin(np.abs(aero_df.index - m))]
@@ -131,6 +132,34 @@ def get_Cd(m, aero_df, thrust):
         return aero_df.loc[nearest, "CD Power-On"]
     else:
         return aero_df.loc[nearest, "CD Power-Off"]
+    
+def rk4_step(y, dt, thrust, aero_df):
+    h, v, m = y
+
+    def derivatives(state):
+        h_, v_, m_ = state
+        rho = get_rho(h_ + LAUNCH_ALT)
+        Cd = get_Cd(v_/((GAMMA*SPECIFIC_GAS_CONST*get_temperature(h_+LAUNCH_ALT))**0.5), aero_df, thrust)
+        drag = 0.5 * rho * v_**2 * Cd * AREF
+        gravity = m_ * 9.81
+        a = (thrust - drag - gravity) / m_
+        m_dot = thrust / (INITIAL_ISP * g0)
+        if m_ <= dry_mass:
+            return np.array([v_, 0.0, 0.0])
+        return np.array([v_, a, -m_dot])
+
+    k1 = derivatives(y)
+    k2 = derivatives(y + 0.5 * dt * k1)
+    k3 = derivatives(y + 0.5 * dt * k2)
+    k4 = derivatives(y + dt * k3)
+
+    y_next = y + dt / 6 * (k1 + 2*k2 + 2*k3 + k4)
+
+    # Enforce dry mass
+    if y_next[2] < dry_mass:
+        y_next[2] = dry_mass
+
+    return y_next
 
 # dataframes
 aero_df = pd.read_csv("CD Test.csv").set_index('Mach')
@@ -139,8 +168,8 @@ flight_df = pd.read_csv("Flight Test.csv")
 wet_mass = flight_df['Weight (lb)'].to_list()[0] / 2.205 # kg
 dry_mass = flight_df['Weight (lb)'].to_list()[-1] / 2.205 # kg
 
-min_thrust = int(wet_mass * 9.81 * 1.1) # N
-max_thrust = int(wet_mass * 9.81 * 10) # N
+min_thrust = int(wet_mass * 9.81 * 6) # N
+max_thrust = int(wet_mass * 9.81 * 8) # N
 
 """
 Flight simulation:
@@ -148,11 +177,14 @@ Flight simulation:
 
 best_apogee = (0,0)
 thrust_values = np.linspace(min_thrust, max_thrust, 10, dtype=int)
+
 for thrust in thrust_values:
     apogee = 0
     max_mach = 0
     max_vel = 0
-    print("Thrust: " + str(int(thrust/4.44822)) + " lbf")
+    print("\nThrust: " + str(int(thrust/4.44822)) + " lbf")
+
+    # Initialize arrays
     time_arr = [0]
     alt_arr = [0]
     velocity_arr = [0]
@@ -160,67 +192,70 @@ for thrust in thrust_values:
     drag_arr = [0]
     mass_arr = [wet_mass]
     mach_arr = [0]
+
     while not apogee:
-        ### Increment time step
+        # Increment time
         time_arr.append(time_arr[-1] + TIMESTEP_MS)
 
-        ### Get forces on the rocket
-        # Gravity Force
-        gravity = get_gravity(alt_arr[-1] + LAUNCH_ALT) * mass_arr[-1] # N
-        # Drag Force
-        rho = get_rho(alt_arr[-1] + LAUNCH_ALT) # kg/m^3
-        Cd = get_Cd(mach_arr[-1],aero_df,thrust_arr[-1])
-        dynamic_pressure = 0.5 * rho * velocity_arr[-1]**2 # Pa
-        drag_arr.append(dynamic_pressure * Cd*AREF) # N
-        # Reultant Force
-        force = thrust_arr[-1] - drag_arr[-1] - gravity # N
+        # Forces
+        gravity = get_gravity(alt_arr[-1] + LAUNCH_ALT) * mass_arr[-1]  # N
+        rho = get_rho(alt_arr[-1] + LAUNCH_ALT)  # kg/m^3
+        Cd = get_Cd(mach_arr[-1], aero_df, thrust_arr[-1])
+        dynamic_pressure = 0.5 * rho * velocity_arr[-1]**2  # Pa
+        drag = dynamic_pressure * Cd * AREF
+        drag_arr.append(drag)
 
-        ### Da Big 3
-        acceleration = force/mass_arr[-1] # m/s^2
-        velocity_arr.append(velocity_arr[-1] + acceleration * TIMESTEP) # m/s
-        alt_arr.append(alt_arr[-1] + velocity_arr[-2] * TIMESTEP + 0.5 * acceleration * TIMESTEP**2) #m
+        # Resultant force
+        force = thrust_arr[-1] - drag - gravity
 
-        # Mach Number
+        # Kinematics
+        acceleration = force / mass_arr[-1]
+        velocity_arr.append(velocity_arr[-1] + acceleration * TIMESTEP)
+        alt_arr.append(alt_arr[-1] + velocity_arr[-2] * TIMESTEP + 0.5 * acceleration * TIMESTEP**2)
+
+        # Mach
         speed_sound = (GAMMA * SPECIFIC_GAS_CONST * get_temperature(alt_arr[-1] + LAUNCH_ALT))**0.5
         mach_arr.append(velocity_arr[-1] / speed_sound)
 
+        # Track max values
         max_vel = max(max_vel, velocity_arr[-1])
         max_mach = max(max_mach, mach_arr[-1])
 
-        # Mass Flow Rate
+        # Mass Flow
         m_dot = thrust_arr[-1] / (INITIAL_ISP * g0)  # kg/s
         new_mass = mass_arr[-1] - m_dot * TIMESTEP
-        # Are we out of prop?
         if new_mass <= dry_mass:
-            # Set mass to dry mass
-            mass_arr.append(dry_mass)
-            # Set thrust to 0
+            new_mass = dry_mass
             thrust_arr.append(0)
         else:
-            mass_arr.append(new_mass)
             thrust_arr.append(thrust)
+        mass_arr.append(new_mass)
 
-        # Detect Apogee
+        # Apogee detection
         if alt_arr[-1] < alt_arr[-2]:
             apogee = alt_arr[-2]
-            print("apogee: " + str(apogee))
-            print("Max mach " + str(max_mach))
-            print("Max velocity " + str(max_vel))
-
-        # End if bad
-        if time_arr[-1] > 500*1000:
-            print("shit broke")
+            print(f"apogee: {apogee:.1f} m")
+            print(f"Max Mach: {max_mach:.2f}")
+            print(f"Max velocity: {max_vel:.1f} m/s")
             break
 
+        # Sim Timeout
+        if time_arr[-1] > 500*1000:
+            print("Simulation timeout")
+            break
+
+    # Update best apogee
     if apogee > best_apogee[0]:
         best_apogee = (apogee, thrust)
 
-print("Best thrust: " + str(int(best_apogee[1]/4.44822)))
-print("Initial TWR: " + str(int(best_apogee[1]/9.81/wet_mass)))
+# Summary
+print("\nBest thrust: " + str(int(best_apogee[1]/4.44822)) + " lbf")
+print("Initial TWR: " + str(best_apogee[1]/(9.81*wet_mass)))
 
-# Compute gravity array
+# Forces plot for last run
+# Change this to best run or maybe a few runs
 gravity_arr = [m * 9.81 for m in mass_arr]
-time_sec = np.array(time_arr) / 1000
+time_sec = np.array(time_arr) / 1000  # seconds
 
 plt.figure(figsize=(10,6))
 plt.plot(time_sec, thrust_arr, label='Thrust (N)', color='r')
@@ -228,7 +263,7 @@ plt.plot(time_sec, drag_arr, label='Drag (N)', color='b')
 plt.plot(time_sec, gravity_arr, label='Gravity (N)', color='g')
 plt.xlabel('Time (s)')
 plt.ylabel('Force (N)')
-plt.title('Rocket Forces vs Time')
+plt.title('Rocket Forces vs Time (Last Thrust Run)')
 plt.grid(True)
 plt.legend()
 plt.show()
