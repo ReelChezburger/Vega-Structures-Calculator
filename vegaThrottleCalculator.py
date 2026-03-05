@@ -6,7 +6,7 @@ import math
 
 TIMESTEP_MS = 10  # milliseconds
 TIMESTEP = TIMESTEP_MS / 1000  # seconds
-MAX_TANK_SET = 590 * 6085 # Pa
+MAX_TANK_SET = 560 * 6085 # Pa
 
 # Temporary, replace with isp at throttle level using CEA
 INITIAL_ISP = 240 # s
