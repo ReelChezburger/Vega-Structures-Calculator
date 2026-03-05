@@ -168,8 +168,8 @@ flight_df = pd.read_csv("Flight Test.csv")
 wet_mass = flight_df['Weight (lb)'].to_list()[0] / 2.205 # kg
 dry_mass = flight_df['Weight (lb)'].to_list()[-1] / 2.205 # kg
 
-min_thrust = int(wet_mass * 9.81 * 6) # N
-max_thrust = int(wet_mass * 9.81 * 8) # N
+min_thrust = int(wet_mass * 9.81 * 1.1) # N
+max_thrust = int(wet_mass * 9.81 * 10) # N
 
 """
 Flight simulation:
