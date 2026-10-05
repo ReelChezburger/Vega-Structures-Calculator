@@ -26,6 +26,34 @@ N = 2000                 # beam discretization
 # ------------------------------------------------------------
 
 components = [
+    {
+        "name": "Nose cone",
+        "mass": 100.0,          # kg
+        "x_front": 0.0,         # m
+        "length": 1.0,          # m
+
+        # Solid tangent-ogive mass distribution
+        #
+        # Mass per unit length is proportional to
+        # cross-sectional area: A(x) = pi * r(x)^2
+        #
+        # r(x) is generated from the ogive geometry.
+        #
+        # Replace this with a function or something for the real code
+        "mass_distribution": np.array([
+            [0.0, 0.0],
+            [0.1, 0.012],
+            [0.2, 0.050],
+            [0.3, 0.116],
+            [0.4, 0.215],
+            [0.5, 0.350],
+            [0.6, 0.520],
+            [0.7, 0.710],
+            [0.8, 0.870],
+            [0.9, 0.970],
+            [1.0, 1.000]
+        ])
+    },
 
     {
         "name": "Forward tank",
